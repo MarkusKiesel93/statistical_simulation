@@ -1,0 +1,435 @@
+---
+title: 'Statistical Simulation and Computerintensive Methods'
+subtitle: 'Exercise 6'
+author: 'Markus Kiesel | 1228952'
+date: '18.10.2021'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, waring=FALSE, tidy=TRUE)
+library(knitr)
+library(formatR)
+library(ISLR)
+library(Metrics)
+library(boot)
+library(ggplot2)
+```
+
+# Task 1
+
+```{r}
+# My Seed
+SEED <- 1228952
+set.seed(SEED)
+```
+
+We will work with the dataset Auto in the ISLR package. Obtain information on the data set, its structure and the real world meaning of its variables from the help page.
+
+```{r}
+# load data
+data(Auto, package='ISLR')
+str(Auto)
+```
+
+## 1) 
+
+Fit the following models
+
+mpg ~ horsepower
+
+mpg ~ poly(horsepower,2)
+
+mpg ~ poly(horsepower,3)
+
+Visualize all 3 models in comparison added to a scatterplot of the input data.
+
+```{r, fig.height=7, fig.width=10}
+# define models
+lm_formula <- formula(mpg ~ horsepower)
+lm <- glm(lm_formula, data=Auto)
+poly2_formula <- formula(mpg ~ poly(horsepower,2))
+poly2 <- glm(poly2_formula, data=Auto)
+poly3_formula <- formula(mpg ~ poly(horsepower,3))
+poly3 <- glm(poly3_formula, data=Auto)
+
+#plot models + data
+plot(Auto$mpg ~ Auto$horsepower, main="Model Comparison mpg by horsepower")
+colors <- c('red', 'blue', 'orange')
+abline(lm$coeff[1], lm$coeff[2], col=colors[1], lw=2)
+lines(sort(Auto$horsepower), fitted(poly2)[order(Auto$horsepower)], col=colors[2], type='l', lw=2)
+lines(sort(Auto$horsepower), fitted(poly3)[order(Auto$horsepower)], col=colors[3], type='l', lw=2)
+legend('topright',
+       legend = c('Linear Model', 'Polynomial 2 Model', 'Polynomial 3 Model'),
+       pch = c(15,15),
+       col = colors)
+```
+
+## 1.2)
+
+Use the validation set approach to compare the models. Use once a train/test split of 50%/50% and once 70%/30%. Choose the best model based on Root Mean Squared Error, Mean Squared Error and Median Absolute Deviation.
+
+```{r}
+# function to evaluate a model on train tests split using RMSE, MSE and MAD
+eval_tts <- function(model_formula, train_index, test_index) {
+  results <- rep(0, 3)
+  # evaluate on test data
+  model <- glm(model_formula, data=Auto, subset=train_index)
+  y <- Auto[test_index, 'mpg']
+  X <- Auto[test_index,]
+  y_hat <- predict(model, X)
+  
+  results[1] <- rmse(y, y_hat)
+  results[2] <- mse(y, y_hat)
+  results[3] <- mad(y, y_hat)
+  
+  return(results)
+}
+```
+
+  
+
+```{r}
+results_tts <- matrix(0, 6, 3)
+rownames(results_tts) <- c('Linear TTS 50/50','Poly 2 TTS 50/50','Poly 3 TTS 50/50',
+                           'Linear TTS 70/30','Poly 2 TTS 70/30','Poly 3 TTS 70/30')
+
+# Train Test Split 50/50
+set.seed(SEED)
+n <- nrow(Auto)
+train_index <- sample(1:n, round(n*0.5))
+test_index <- c(1:n)[-train_index]
+# linear model
+results_tts[1,] <- eval_tts(lm_formula, train_index, test_index)
+# poly model second order
+results_tts[2,] <- eval_tts(poly2_formula, train_index, test_index)
+# poly model third order
+results_tts[3,] <- eval_tts(poly3_formula, train_index, test_index)
+
+# Train Test Split 70/30
+set.seed(SEED)
+n <- nrow(Auto)
+train_index <- sample(1:n, round(n*0.7))
+test_index <- c(1:n)[-train_index]
+# linear model
+results_tts[4,] <- eval_tts(lm_formula, train_index, test_index)
+# poly model second order
+results_tts[5,] <- eval_tts(poly2_formula, train_index, test_index)
+# poly model third order
+results_tts[6,] <- eval_tts(poly3_formula, train_index, test_index)
+```
+
+```{r, results = 'asis'}
+table <- results_tts
+colnames(table) <- c('RMSE', 'MSE', 'MAD')
+
+kable(table, caption = 'Comparison of Model Performance Train Test Split')
+```
+
+Based on the train-test split validation the linear model performs worst for all three measures.
+Both polynomial models perform better over all three measures whereas the polynomial model of third degree performs slightly better on RMSE and MSE but not on MAD.
+We further notice that the models trained on 70% of the data performs better than the model only trained on 50% of the data which we would expect.
+
+## 1.3)
+
+Use the cv.glm function in the boot package for the following steps.
+
+```{r}
+# function to evaluate models using CV (use adjusted cross-validation estimate)
+eval_cv <- function(model, data, K) {
+  results <- rep(0, 3)
+  
+  # extract CV results
+  results[1] <- cv.glm(data, model, K=K, cost=rmse)$delta[2]
+  results[2] <- cv.glm(data, model, K=K, cost=mse)$delta[2]
+  results[3] <- cv.glm(data, model, K=K, cost=mad)$delta[2]
+
+  return(results)
+}
+```
+
+### 1.3.1)
+
+Use cv.glm for Leave-one-out Cross Validation to compare the models above.
+
+```{r}
+# results for Leave-one-out Cross Validation
+results_loocv <- matrix(0, 3, 3)
+rownames(results_loocv) <- c('Linear LOOCV','Poly 2 LOOCV','Poly 3 LOOCV')
+
+# Leave One Out Cross Validation (k is number of observations)
+K <- nrow(Auto)
+# linear model
+results_loocv[1,] <- eval_cv(lm, Auto, K)
+# poly model second order
+results_loocv[2,] <- eval_cv(poly2, Auto, K)
+# poly model third order
+results_loocv[3,] <- eval_cv(poly3, Auto, K)
+```
+
+
+### 1.3.2)
+Use cv.glm for 5-fold and 10-fold Cross Validation to compare the models above.
+
+```{r}
+# results for 5-fold and 10-fold Cross Validation´
+results_fcv <- matrix(0, 6, 3)
+rownames(results_fcv) <- c('Linear CV K=5','Poly 2 CV K=5','Poly 3 CV K=5',
+                           'Linear CV K=10','Poly 2 K=10','Poly 3 K=10')
+# 5-Fold Cross Validation
+K <- 5
+# linear model
+results_fcv[1,] <- eval_cv(lm, Auto, K)
+# poly model second order
+results_fcv[2,] <- eval_cv(poly2, Auto, K)
+# poly model third order
+results_fcv[3,] <- eval_cv(poly3, Auto, K)
+
+# 10-Fold Cross Validation
+K <- 10
+# linear model
+results_fcv[4,] <- eval_cv(lm, Auto, K)
+# poly model second order
+results_fcv[5,] <- eval_cv(poly2, Auto, K)
+# poly model third order
+results_fcv[6,] <- eval_cv(poly3, Auto, K)
+```
+
+
+### 1.4)
+
+Compare all results from 2 and 3. in a table and draw your conclusions.
+
+```{r, results = 'asis'}
+table <- rbind(results_tts, results_loocv, results_fcv)
+colnames(table) <- c('RMSE', 'MSE', 'MAD')
+
+kable(table, caption = 'Comparison of Model Performance TTS and CV')
+```
+
+When we compare the measures of all evaluation methods and all models we notice that using Cross Validation leads to better performing models in general which we would expect because the model can be trained on more data. In general a larger K leads to slightly better performing models.
+
+The exception is the MAD for the linear LOOCV.
+
+The same arguments can be made about the difference in performance of the models as was done for the train-test split part.
+
+# Task 2
+
+Load the data set 'economics' from the package 'ggplot2'.
+
+```{r}
+# load data
+data(economics, package = 'ggplot2')
+str(economics)
+```
+
+## 2.1)
+
+Fit the following models to explain the number of unemployed persons 'unemploy' by the median number of days unemployed 'uempmed' and vice versa:
+
+* linear model
+* an appropriate exponential or logarithmic model (which one is appropriate depends on which is the dependent or independent variable)
+* polynomial model of 2nd, 3rd and 10th degree
+
+
+```{r}
+# number of unemployed persons by the median number of days unemployed
+
+# linear model
+lm_unemploy <- glm(unemploy ~ uempmed, data = economics)
+# logarithmic model
+log_unemploy <- glm(unemploy ~ log(uempmed), data = economics)
+# polynomial models
+poly_unemploy_2 <- glm(unemploy ~ poly(uempmed, 2), data = economics)
+poly_unemploy_3 <- glm(unemploy ~ poly(uempmed, 3), data = economics)
+poly_unemploy_10 <- glm(unemploy ~ poly(uempmed, 10), data = economics)
+
+# median number of days unemployed by number of unemployed persons
+
+# linear model
+lm_uempmed <- glm(uempmed ~ unemploy, data = economics)
+# exponential model
+expm_uempmed <- glm(uempmed ~ exp(scale(unemploy)), data = economics)
+# polynomial models
+poly_uempmed_2 <- glm(uempmed ~ poly(unemploy, 2), data = economics)
+poly_uempmed_3 <- glm(uempmed ~ poly(unemploy, 3), data = economics)
+poly_uempmed_10 <- glm(uempmed ~ poly(unemploy, 10), data = economics)
+```
+
+
+## 2.2)
+
+Plot the corresponding data and add all the models for comparison.
+
+
+```{r, fig.height=7, fig.width=10}
+# plot models unemploy ~ uempmed
+plot(economics$unemploy ~ economics$uempmed, main='Model comparison unemploy by uempmed')
+colors <- c('red', 'orange', 'blue', 'purple', 'cyan')
+abline(lm_unemploy$coeff[1], lm_unemploy$coeff[2], col=colors[1], lw=2)
+lines(sort(economics$uempmed), fitted(log_unemploy)[order(economics$uempmed)], col=colors[2], type='l', lw=2)
+lines(sort(economics$uempmed), fitted(poly_unemploy_2)[order(economics$uempmed)], col=colors[3], type='l', lw=2)
+lines(sort(economics$uempmed), fitted(poly_unemploy_3)[order(economics$uempmed)], col=colors[4], type='l', lw=2)
+lines(sort(economics$uempmed), fitted(poly_unemploy_10)[order(economics$uempmed)], col=colors[5], type='l', lw=2)
+legend('bottomright',
+       legend = c('Linear Model', 'Logarithmic Model', 'Polynomial 2 Model', 'Polynomial 3 Model', 'Polynomial 10 Model'),
+       pch = c(15,15),
+       col = colors)
+```
+
+```{r, fig.height=7, fig.width=10}
+# plot models uempmed ~ unemploy 
+plot(economics$uempmed ~ economics$unemploy, main='Model comparison uempmed by unemploy')
+colors <- c('red', 'orange', 'blue', 'purple', 'cyan')
+abline(lm_uempmed$coeff[1], lm_uempmed$coeff[2], col=colors[1], lw=2)
+lines(sort(economics$unemploy), fitted(expm_uempmed)[order(economics$unemploy)], col=colors[2], type='l', lw=2)
+lines(sort(economics$unemploy), fitted(poly_uempmed_2)[order(economics$unemploy)], col=colors[3], type='l', lw=2)
+lines(sort(economics$unemploy), fitted(poly_uempmed_3)[order(economics$unemploy)], col=colors[4], type='l', lw=2)
+lines(sort(economics$unemploy), fitted(poly_uempmed_10)[order(economics$unemploy)], col=colors[5], type='l', lw=2)
+legend('bottomright',
+       legend = c('Linear Model', 'Exponential Model', 'Polynomial 2 Model', 'Polynomial 3 Model', 'Polynomial 10 Model'),
+       pch = c(15,15),
+       col = colors)
+```
+
+## 2.3)
+
+Use the cv.glm function in the boot package for the following steps.
+
+## 2.3.1)
+
+Use cv.glm for Leave-one-out Cross Validation to compare the models above.
+
+
+```{r}
+# Results for unemploy ~ uempmed
+results_unemploy_loocv <- matrix(0, 5, 3)
+rownames(results_unemploy_loocv) <- c('Linear LOOCV', 'Log LOOCV', 'Poly 2 LOOCV', 'Poly 3 LOOCV', 'Poly 10 LOOCV')
+
+# Leave One Out Cross Validation (k is number of observations)
+K <- nrow(economics)
+# linear model
+results_unemploy_loocv[1,] <- eval_cv(lm_unemploy, economics, K)
+# log model
+results_unemploy_loocv[2,] <- eval_cv(log_unemploy, economics, K)
+# poly model second order
+results_unemploy_loocv[3,] <- eval_cv(poly_unemploy_2, economics, K)
+# poly model third order
+results_unemploy_loocv[4,] <- eval_cv(poly_unemploy_3, economics, K)
+# poly model tenth order
+results_unemploy_loocv[5,] <- eval_cv(poly_unemploy_10, economics, K)
+```
+
+
+```{r}
+# Results for uempmed ~ unemploy 
+results_uempmed_loocv <- matrix(0, 5, 3)
+rownames(results_uempmed_loocv) <- c('Linear LOOCV', 'Exp LOOCV', 'Poly 2 LOOCV', 'Poly 3 LOOCV', 'Poly 10 LOOCV')
+
+# Leave One Out Cross Validation (k is number of observations)
+K <- nrow(Auto)
+# linear model
+results_uempmed_loocv[1,] <- eval_cv(lm_uempmed, economics, K)
+# exp model
+results_uempmed_loocv[2,] <- eval_cv(expm_uempmed, economics, K)
+# poly model second order
+results_uempmed_loocv[3,] <- eval_cv(poly_uempmed_2, economics, K)
+# poly model third order
+results_uempmed_loocv[4,] <- eval_cv(poly_uempmed_3, economics, K)
+# poly model tenth order
+results_uempmed_loocv[5,] <- eval_cv(poly_uempmed_10, economics, K)
+```
+
+
+## 2.3.2)
+
+Use cv.glm for 5-fold and 10-fold Cross Validation to compare the models above. Compare the Root Mean Squared Error, Mean Squared Error and Median Absolute Deviation.
+
+```{r}
+# Results for unemploy ~ uempmed
+results_unemploy_fcv <- matrix(0, 10, 3)
+rownames(results_unemploy_fcv) <- c('Linear CV K=5', 'Exp CV K=5', 'Poly 2 CV K=5', 'Poly 3 CV K=5', 'Poly 10 CV K=5',
+                                    'Linear CV K=10', 'Exp CV K=10', 'Poly 2 CV K=10', 'Poly 3 CV K=10', 'Poly 10 CV K=10')
+# 5-Fold Cross Validation
+K <- 5
+# linear model
+results_unemploy_fcv[1,] <- eval_cv(lm_unemploy, economics, K)
+# log model
+results_unemploy_fcv[2,] <- eval_cv(log_unemploy, economics, K)
+# poly model second order
+results_unemploy_fcv[3,] <- eval_cv(poly_unemploy_2, economics, K)
+# poly model third order
+results_unemploy_fcv[4,] <- eval_cv(poly_unemploy_3, economics, K)
+# poly model tenth order
+results_unemploy_fcv[5,] <- eval_cv(poly_unemploy_10, economics, K)
+
+# 10-Fold Cross Validation
+K <- 10
+# linear model
+results_unemploy_fcv[6,] <- eval_cv(lm_unemploy, economics, K)
+# log model
+results_unemploy_fcv[7,] <- eval_cv(log_unemploy, economics, K)
+# poly model second order
+results_unemploy_fcv[8,] <- eval_cv(poly_unemploy_2, economics, K)
+# poly model third order
+results_unemploy_fcv[9,] <- eval_cv(poly_unemploy_3, economics, K)
+# poly model tenth order
+results_unemploy_fcv[10,] <- eval_cv(poly_unemploy_10, economics, K)
+```
+
+
+```{r}
+# Results for uempmed ~ unemploy 
+results_uempmed_fcv <- matrix(0, 10, 3)
+rownames(results_uempmed_fcv) <- c('Linear CV K=5', 'Exp CV K=5', 'Poly 2 CV K=5', 'Poly 3 CV K=5', 'Poly 10 CV K=5',
+                                   'Linear CV K=10', 'Exp CV K=10', 'Poly 2 CV K=10', 'Poly 3 CV K=10', 'Poly 10 CV K=10')
+# 5-Fold Cross Validation
+K <- 5
+# linear model
+results_uempmed_fcv[1,] <- eval_cv(lm_uempmed, economics, K)
+# exp model
+results_uempmed_fcv[2,] <- eval_cv(expm_uempmed, economics, K)
+# poly model second order
+results_uempmed_fcv[3,] <- eval_cv(poly_uempmed_2, economics, K)
+# poly model third order
+results_uempmed_fcv[4,] <- eval_cv(poly_uempmed_3, economics, K)
+# poly model tenth order
+results_uempmed_fcv[5,] <- eval_cv(poly_uempmed_10, economics, K)
+
+# 10-Fold Cross Validation
+K <- 10
+# linear model
+results_uempmed_fcv[6,] <- eval_cv(lm_uempmed, economics, K)
+# exp model
+results_uempmed_fcv[7,] <- eval_cv(expm_uempmed, economics, K)
+# poly model second order
+results_uempmed_fcv[8,] <- eval_cv(poly_uempmed_2, economics, K)
+# poly model third order
+results_uempmed_fcv[9,] <- eval_cv(poly_uempmed_3, economics, K)
+# poly model tenth order
+results_uempmed_fcv[10,] <- eval_cv(poly_uempmed_10, economics, K)
+```
+
+
+## 2.4)
+
+Explain based on the CV and graphical model fits the concepts of Underfitting, Overfitting and how to apply cross-validation to determine the appropriate model fit. Also, describe the different variants of cross validation in this context.
+
+```{r, results = 'asis'}
+table <- rbind(results_unemploy_loocv, results_unemploy_fcv)
+colnames(table) <- c('RMSE', 'MSE', 'MAD')
+
+kable(table, caption = 'Comparison of Model uempmed ~ unemploy CV Performance')
+```
+
+
+```{r, results = 'asis'}
+table <- rbind(results_uempmed_loocv, results_uempmed_fcv)
+colnames(table) <- c('RMSE', 'MSE', 'MAD')
+
+kable(table, caption = 'Comparison of Model unemploy ~ uempmed CV Performance')
+```
+
+todo: Conclusion
+
+</div></pre>
