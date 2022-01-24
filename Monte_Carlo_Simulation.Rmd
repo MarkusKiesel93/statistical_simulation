@@ -2,7 +2,7 @@
 title: "Statistical Simulation and Computerintensive Methods"
 subtitle: "Exercise 3: Monte Carlo Simulation"
 author: "Markus Kiesel | 1228952"
-date: "11.10.2021"
+date: "22.10.2021"
 output: pdf_document
 ---
 
@@ -179,10 +179,8 @@ points_indicate <- function(x, y) {
   # calculate polar coordinates for points
   points <- cart2pol(x, y)
   points <- points %>%
-    # transform theta
-    mutate(theta = theta - pi/2) %>%
     # check if radius of random point smaller radius of function
-    mutate(in_area = r < abs(r(theta)))
+    mutate(in_area = r < abs(r(theta - pi/2)))
   return(points)
 }
 
@@ -241,10 +239,10 @@ table <- data.frame(n, perc, area)
 ```
 
 ```{r, results = "asis", echo = FALSE}
-kable(table, caption = "Todo Title")
+kable(table, caption = "Monte Carlo Area Estimation")
 ```
 
-Although there is a problem with the shape of the area (probaply the transformation of theta values is wrong) we can show the area approximation gets better with the size of the simulation if we have a look at the table. The plots tell us that more and more points lead to a better estimate. We see clearly that the area can not be estimated with only 100 points whereas 10000 points fill the whole rectangle we use to calculate tha area of the shape.
+Although there is a problem with the shape of the area (probably the transformation of theta values is wrong) we can show the area approximation gets better with the size of the simulation if we have a look at the table. The plots tell us that more and more points lead to a better estimate. We see clearly that the area can not be estimated with only 100 points whereas 10000 points fill the whole rectangle we use to calculate the area of the shape.
 
 
 ## Functionality of Monte Carlo simulation

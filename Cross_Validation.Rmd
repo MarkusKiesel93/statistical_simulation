@@ -2,8 +2,10 @@
 title: 'Statistical Simulation and Computerintensive Methods'
 subtitle: 'Exercise 6'
 author: 'Markus Kiesel | 1228952'
-date: '18.10.2021'
-output: pdf_document
+date: '27.11.2021'
+output:
+  pdf_document:
+    toc: true
 ---
 
 ```{r setup, include=FALSE}
@@ -15,6 +17,8 @@ library(Metrics)
 library(boot)
 library(ggplot2)
 ```
+
+\newpage
 
 # Task 1
 
@@ -32,7 +36,7 @@ data(Auto, package='ISLR')
 str(Auto)
 ```
 
-## 1) 
+## 1.1) 
 
 Fit the following models
 
@@ -207,7 +211,7 @@ colnames(table) <- c('RMSE', 'MSE', 'MAD')
 kable(table, caption = 'Comparison of Model Performance TTS and CV')
 ```
 
-When we compare the measures of all evaluation methods and all models we notice that using Cross Validation leads to better performing models in general which we would expect because the model can be trained on more data. In general a larger K leads to slightly better performing models.
+When we compare the measures of all evaluation methods and all models we notice that using Cross Validation leads to better performing models in general which we would expect because the model can be trained on more data. In general a larger K leads to slightly better performing models. Here it is important to know that LOOCV can be a too optimistic estimation of the error.
 
 The exception is the MAD for the linear LOOCV.
 
@@ -327,7 +331,7 @@ results_uempmed_loocv <- matrix(0, 5, 3)
 rownames(results_uempmed_loocv) <- c('Linear LOOCV', 'Exp LOOCV', 'Poly 2 LOOCV', 'Poly 3 LOOCV', 'Poly 10 LOOCV')
 
 # Leave One Out Cross Validation (k is number of observations)
-K <- nrow(Auto)
+K <- nrow(economics)
 # linear model
 results_uempmed_loocv[1,] <- eval_cv(lm_uempmed, economics, K)
 # exp model
@@ -348,8 +352,8 @@ Use cv.glm for 5-fold and 10-fold Cross Validation to compare the models above. 
 ```{r}
 # Results for unemploy ~ uempmed
 results_unemploy_fcv <- matrix(0, 10, 3)
-rownames(results_unemploy_fcv) <- c('Linear CV K=5', 'Exp CV K=5', 'Poly 2 CV K=5', 'Poly 3 CV K=5', 'Poly 10 CV K=5',
-                                    'Linear CV K=10', 'Exp CV K=10', 'Poly 2 CV K=10', 'Poly 3 CV K=10', 'Poly 10 CV K=10')
+rownames(results_unemploy_fcv) <- c('Linear CV K=5', 'Log CV K=5', 'Poly 2 CV K=5', 'Poly 3 CV K=5', 'Poly 10 CV K=5',
+                                    'Linear CV K=10', 'Log CV K=10', 'Poly 2 CV K=10', 'Poly 3 CV K=10', 'Poly 10 CV K=10')
 # 5-Fold Cross Validation
 K <- 5
 # linear model
@@ -411,10 +415,6 @@ results_uempmed_fcv[10,] <- eval_cv(poly_uempmed_10, economics, K)
 ```
 
 
-## 2.4)
-
-Explain based on the CV and graphical model fits the concepts of Underfitting, Overfitting and how to apply cross-validation to determine the appropriate model fit. Also, describe the different variants of cross validation in this context.
-
 ```{r, results = 'asis'}
 table <- rbind(results_unemploy_loocv, results_unemploy_fcv)
 colnames(table) <- c('RMSE', 'MSE', 'MAD')
@@ -424,12 +424,28 @@ kable(table, caption = 'Comparison of Model uempmed ~ unemploy CV Performance')
 
 
 ```{r, results = 'asis'}
-table <- rbind(results_uempmed_loocv, results_uempmed_fcv)
+table <- rbind(results_uempmed_loocv[-2,], results_uempmed_fcv)
 colnames(table) <- c('RMSE', 'MSE', 'MAD')
 
 kable(table, caption = 'Comparison of Model unemploy ~ uempmed CV Performance')
 ```
 
-todo: Conclusion
+### Elvauation of Moedl
+
+All measures clearly indicate that the liner model performs worst which we also clearly see in the model fit graph. The polynomial models of second and third degree and the logarithmic model all perform very similar where the polynomial model of third degree is best performing model in general. For this models we can not detect any overfitting. The polynomial model of tenth degree performs very good when we evaluate it with LOOCV at least for RMSE and MAD but not so well with 5-fold and 10-fold CV. We also notice that the polynomial model of tenth degree clearly overfitts.
+
+The exponential model did not return LOOCV errors unfortunately.
+
+
+## 2.4)
+
+Explain based on the CV and graphical model fits the concepts of Underfitting, Overfitting and how to apply cross-validation to determine the appropriate model fit. Also, describe the different variants of cross validation in this context.
+
+In our experiments we underfitt when we use a linear model. Both plots show us a clear non linear relationship between unemploy and uempmed. When we use a linear model in this case we ignore this fact which leads to a model which is too simple in its strcture.
+On the other hand we overfitt when we use a polynomial model of tenth degree. In the plots we clearly see that the model tries to fit the training data too much. This model would not perform very well on new unseen data in some regions. So the model is to complex and does not generalise well.
+The challenge is to find a model which balances these factors and generalizes well.
+
+The different variants of CV are Leave-one-out CV and K-Fold CV. LOOCV has the advantage of having less bias because all n-1 observations are used in the model estimation and we do not need random splitting. The main disadvantage is the computational cost of this evaluation method. In K-Fold CV we split the data k times and use k-1 parts of the data for our model estimation. This method is more effective with usual values of 5 and 10 for k.
+
 
 </div></pre>
